@@ -3,20 +3,21 @@
 import sys
 import math
 import locale
+from time import perf_counter_ns
 
 from cython.view cimport array as cvarray
 from libc.stdio cimport printf
 
 from platform import system, release, version
-from ctypes import WinDLL, wintypes, byref
+from ctypes import wintypes, byref
 
-locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+# locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 
 # Types
 ctypedef unsigned long long ull
 
 # Imports kernel32.dll
-kernel32 = WinDLL('kernel32', use_last_error=True)
+# kernel32 = WinDLL('kernel32', use_last_error=True)
 
 # Globals
 cdef ull pr = 0
@@ -32,11 +33,11 @@ class Header:
     def output(self):
         hpr = pr // 1000000
         ppr = "M"
-        
+
         if hpr > 1024:
             hpr //= 1000
             ppr = "B"
-    
+
         print(f"{85 * '-'}\n{35 * ' '}PYPrime 2.0{35 * ' '}\n{85 * '-'}\n\n" \
               f'OS    : {self.OS}\n' \
               f'Timer : {round(self.qpf / 1000000, 2)} MHz\n' \
@@ -44,7 +45,7 @@ class Header:
 
 # Score
 
-class Score:   
+class Score:
     def __init__(self, prime, valid, time):
         self.prime = prime
         self.valid = valid
@@ -69,19 +70,20 @@ def print_memalloc(bytes):
     if size < 1.0:
         size = bytes / 1000000
         name = "MB"
-        
+
         if size < 1.0:
             size = bytes / 1000
             name = "KB"
-    
+
     print("Sieve allocation: {:0.1f} {}".format(round(size, 1), name), flush=True)
 
 cdef print_status(int loop, ull qpf, ull start_time):
     end_time = wintypes.LARGE_INTEGER()
 
-    kernel32.QueryPerformanceCounter(byref(end_time))
+    # kernel32.QueryPerformanceCounter(byref(end_time))
+    end_time = perf_counter_ns()
 
-    print("    Step {:} ....... {:0.3f} s".format(loop, round((end_time.value - start_time) / qpf, 3)), flush=True)
+    print("    Step {:} ....... {:0.3f} s".format(loop, round((end_time - start_time) / qpf, 3)), flush=True)
 
 cdef ull calc(unsigned char [::1] sieve, ull limit, ull sqrtlimit, ull qpf, ull start_time) nogil:
     cdef ull limit1, sqrtlimit1, loopstep, nextstep, x, x2, x2b3, x2b4, y, y2, n, m, o, nd, md
@@ -144,7 +146,7 @@ cdef ull calc(unsigned char [::1] sieve, ull limit, ull sqrtlimit, ull qpf, ull 
             y = x2
             while y < limit1:
                 sieve[y / 8] &= ~(1 << (y % 8));
-                
+
                 y += x2
 
         x += 1
@@ -176,17 +178,18 @@ cdef benchmark(ull limit, ull qpf):
     print("Starting benchmark:\n", flush=True)
 
     # Start timestamp
-    kernel32.QueryPerformanceCounter(byref(start_time))
+    start_time = perf_counter_ns()
 
     # Calculation
-    resultx = calc(sieve, limit, int(math.sqrt(limit)), qpf, start_time.value)
+    resultx = calc(sieve, limit, int(math.sqrt(limit)), qpf, start_time)
 
     # End timestamp
-    kernel32.QueryPerformanceCounter(byref(end_time))
+    end_time = perf_counter_ns()
+    # kernel32.QueryPerformanceCounter(byref(end_time))
 
     # Finish the calculation
     result = (sieve[resultx].bit_length() - 1) + resultx * 8
-    time = round((end_time.value - start_time.value) / qpf, 3)
+    time = round((end_time - start_time) / qpf, 3)
 
     # Output end time
     print("    Sieve Scan ... {:0.3f} s".format(time), flush=True)
@@ -269,15 +272,13 @@ while True:
         break
 
     # Header
-    qpf = wintypes.LARGE_INTEGER()
+    qpf = 1000000000
 
-    kernel32.QueryPerformanceFrequency(byref(qpf))
-
-    Header = Header(qpf.value)
+    Header = Header(qpf)
     Header.output()
 
     # Benchmark
-    run = benchmark(pr, qpf.value)
+    run = benchmark(pr, qpf)
     #print(f"RUN: {run}")
 
     # Score
